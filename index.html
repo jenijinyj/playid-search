@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlayID 查询器</title>
+<style>
+:root { color-scheme: light; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f0f2f5; color: #1a1a2e; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 20px;
+}
+.container { width: 100%; max-width: 820px; }
+h1 {
+  font-size: 28px; font-weight: 700; text-align: center;
+  margin-bottom: 8px; color: #1a1a2e;
+}
+.subtitle {
+  text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 28px;
+}
+.search-box { position: relative; margin-bottom: 20px; }
+.search-box svg.search-icon {
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; color: #9ca3af;
+}
+#searchInput {
+  width: 100%; padding: 14px 16px 14px 46px; font-size: 16px;
+  border: 2px solid #e5e7eb; border-radius: 12px; outline: none;
+  background: #fff; transition: border-color 0.2s, box-shadow 0.2s;
+}
+#searchInput:focus {
+  border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.result-count {
+  font-size: 13px; color: #6b7280; margin-bottom: 10px; padding-left: 4px;
+}
+.card-list { display: flex; flex-direction: column; gap: 8px; }
+.card {
+  background: #fff; border-radius: 10px; padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+.card .name {
+  min-width: 180px; font-weight: 600; font-size: 14px; color: #1a1a2e;
+}
+.card .id-btn {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 13px; background: #eef2ff; color: #4f46e5;
+  padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer;
+  font-weight: 500; transition: background 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.card .id-btn:hover { background: #e0e7ff; }
+.card .id-btn svg { width: 12px; height: 12px; }
+.card .link {
+  margin-left: auto; color: #6366f1; font-size: 13px;
+  text-decoration: none; display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+}
+.card .link:hover { background: #f5f3ff; text-decoration: underline; }
+.card .link svg { width: 14px; height: 14px; }
+.empty-state {
+  text-align: center; padding: 60px 20px; color: #9ca3af;
+}
+.empty-state svg { width: 56px; height: 56px; margin-bottom: 14px; color: #d1d5db; }
+.empty-state p { font-size: 15px; line-height: 1.6; }
+.empty-state .hint { font-size: 12px; color: #b0b0b8; margin-top: 6px; }
+mark { background: #fef08a; border-radius: 2px; padding: 0 2px; }
+.toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: #1e1b4b; color: #fff; padding: 10px 24px; border-radius: 8px;
+  font-size: 14px; opacity: 0; transition: all 0.3s ease; pointer-events: none;
+  z-index: 100;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (max-width: 600px) {
+  .card { flex-wrap: wrap; }
+  .card .name { min-width: 100%; }
+  .card .link { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔍 PlayID 查询器</h1>
+  <p class="subtitle">输入名称模糊搜索 · 点击 ID 复制 · 点击 Link 打开</p>
+  <div class="search-box">
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.803 5.803a7.5 7.5 0 009.999 9.999z" /></svg>
+    <input type="text" id="searchInput" placeholder="如: DBS BAU / SQ / MEGA / Air-China ..." autofocus autocomplete="off">
+  </div>
+  <div class="result-count" id="resultCount"></div>
+  <div id="listWrap"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = [
+{"id":"39299-132771","name":"DBS_BAU_ALL"},{"id":"39299-132778","name":"DBS_BAU_F"},{"id":"39299-132785","name":"DBS_BAU_H"},{"id":"39299-133002","name":"DBS_BAU_NEW"},{"id":"39481-132946","name":"DBS_MON_1"},{"id":"39481-132953","name":"DBS_MON_2"},{"id":"39453-132792","name":"CITI_BAU_ALL"},{"id":"39453-132799","name":"CITI_BAU_F"},{"id":"39453-132806","name":"CITI_BAU_H"},{"id":"39453-133009","name":"CITI_BAU_NEW"},{"id":"39488-132967","name":"CITI_FRI_1"},{"id":"39488-132974","name":"CITI_FRI_2"},{"id":"39460-132834","name":"OCBC_BAU_ALL"},{"id":"39460-132848","name":"OCBC_BAU_F"},{"id":"39460-132855","name":"OCBC_BAU_H"},{"id":"39460-133023","name":"OCBC_BAU_NEW"},{"id":"39467-132862","name":"HSBC_BAU_ALL"},{"id":"39467-132869","name":"HSBC_BAU_F"},{"id":"39467-132876","name":"HSBC_BAU_H"},{"id":"39495-132981","name":"HSBC_THU_1"},{"id":"39495-132988","name":"HSBC_THU_2"},{"id":"39474-132883","name":"DCS_BAU_ALL"},{"id":"39474-132890","name":"DCS_BAU_F"},{"id":"39474-132897","name":"DCS_BAU_H"},{"id":"40223-135823","name":"UOB_BAU_ALL"},{"id":"40223-135837","name":"UOB_BAU_F"},{"id":"40223-135844","name":"UOB_BAU_H"},{"id":"40223-135830","name":"UOB_UTC7"},{"id":"40657-136467","name":"SCB_BAU_ALL"},{"id":"40657-136474","name":"SCB_BAU_F"},{"id":"40657-136481","name":"SCB_BAU_H"},{"id":"39299-142998","name":"DBS_China_1"},{"id":"39299-148353","name":"DBS_China_2"},{"id":"39299-143005","name":"DBS_China_F"},{"id":"39299-143012","name":"DBS_China_H"},{"id":"40629-144706","name":"SG_TH_1"},{"id":"40629-144713","name":"SG_TH_F"},{"id":"40629-144720","name":"SG_TH_H"},{"id":"40636-142018","name":"MY_TH_F"},{"id":"40636-142025","name":"MY_TH_H"},{"id":"40538-142865","name":"ID_TH_F"},{"id":"40538-142872","name":"ID_TH_H"},{"id":"39341-143397","name":"SG_JP_1"},{"id":"39341-149375","name":"SG_JP_F"},{"id":"39341-149382","name":"SG_JP_H"},{"id":"39355-146911","name":"MY_JP_1"},{"id":"39348-142928","name":"ID_JP_F"},{"id":"39348-142935","name":"ID_JP_H"},{"id":"41385-153701","name":"SG_VN_1"},{"id":"41371-153715","name":"MY_VN_1"},{"id":"41364-142893","name":"ID_VN_F"},{"id":"41364-142900","name":"ID_VN_H"},{"id":"36317-139127","name":"SG_AU_1"},{"id":"36317-140156","name":"SG_AU_2"},{"id":"36317-139134","name":"SG_AU_F"},{"id":"36317-139141","name":"SG_AU_H"},{"id":"38431-130818","name":"6E Indigo"},{"id":"46628-153211","name":"9G Sun-PhuQuoc-Airways"},{"id":"38438-130825","name":"AC Air-Canada"},{"id":"38445-130832","name":"AF Air-France"},{"id":"38452-130839","name":"AI Air-India"},{"id":"38459-130846","name":"BR Eva-Air"},{"id":"38466-130853","name":"CA Air-China"},{"id":"38473-130860","name":"CI China-Airlines"},{"id":"38480-130867","name":"CX Cathay-Pacific"},{"id":"38487-130874","name":"EK Emirates"},{"id":"38494-130881","name":"ET Ethiopian-Airlines"},{"id":"38515-130888","name":"JL Japan-Airlines"},{"id":"38522-130895","name":"JX Starlux-Airlines"},{"id":"38529-130902","name":"KE Korean-Air"},{"id":"38536-130909","name":"MH Malaysia-Airlines"},{"id":"38543-130916","name":"MU China-Eastern-Airlines"},{"id":"38550-130923","name":"NH All-Nippon-Airways"},{"id":"38557-130930","name":"NZ Air-New-Zealand"},{"id":"38564-130937","name":"PR Philippine-Airlines"},{"id":"38571-130944","name":"QF Qantas-Airways"},{"id":"38578-130951","name":"QR Qatar-Airways"},{"id":"38585-130958","name":"SQ Singapore-Airlines"},{"id":"38592-130965","name":"TG Thai-Airways"},{"id":"38599-130972","name":"TR Scoot"},{"id":"38606-130979","name":"VN Vietnam-Airlines"},{"id":"38403-131350","name":"T evergreen"},{"id":"38403-131364","name":"T MEGA_1"},{"id":"38403-134563","name":"T MEGA_2"},{"id":"38403-131329","name":"P evergreen"},{"id":"38403-131413","name":"CRU all_sku"},{"id":"38403-138371","name":"CRU_stardream"},{"id":"38403-131420","name":"CRU MEGA_1"},{"id":"38403-131336","name":"C evergreen"},{"id":"38403-131385","name":"C MEGA_1"},{"id":"38403-131392","name":"C MEGA_2"},{"id":"38403-131399","name":"C MEGA_3"},{"id":"38403-131406","name":"C MEGA_4"},{"id":"38403-131343","name":"A evergreen"},{"id":"38403-131371","name":"A MEGA_1"},{"id":"38403-131378","name":"A MEGA_2"}
+];
+
+function buildLink(id) {
+  const [a, b] = id.split('-');
+  return `https://zoo.ibu.ctripcorp.com/promo/detail/${a}/mechanics/mechanism/edit/${b}`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+function highlight(text, keywords) {
+  let out = escapeHtml(text);
+  keywords.forEach(kw => {
+    if (!kw) return;
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(${esc})`, 'gi'), '<mark>$1</mark>');
+  });
+  return out;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function copyId(id) {
+  navigator.clipboard.writeText(id).then(() => showToast(`✅ 已复制: ${id}`))
+  .catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = id; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    showToast(`✅ 已复制: ${id}`);
+  });
+}
+
+function render(results, keywords) {
+  const wrap = document.getElementById('listWrap');
+  const countEl = document.getElementById('resultCount');
+
+  if (keywords.length === 0) {
+    countEl.textContent = '';
+    wrap.innerHTML = `<div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.803 5.803a7.5 7.5 0 009.999 9.999z" /></svg>
+      <p>请输入名称进行搜索</p>
+      <p class="hint">支持模糊匹配 · 空格分隔多关键词</p>
+    </div>`;
+    return;
+  }
+
+  if (results.length === 0) {
+    countEl.textContent = '';
+    wrap.innerHTML = `<div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      <p>没有匹配的结果</p>
+    </div>`;
+    return;
+  }
+
+  countEl.textContent = `找到 ${results.length} 条结果`;
+  let html = '<div class="card-list">';
+  results.forEach(r => {
+    const link = buildLink(r.id);
+    html += `<div class="card">
+      <div class="name">${highlight(r.name, keywords)}</div>
+      <button class="id-btn" onclick="copyId('${r.id}')" title="点击复制 PlayID">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
+        ${r.id}
+      </button>
+      <a class="link" href="${link}" target="_blank" rel="noopener" title="在新窗口打开">
+        打开链接
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+      </a>
+    </div>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function doSearch() {
+  const raw = document.getElementById('searchInput').value.trim();
+  if (!raw) { render([], []); return; }
+  const keywords = raw.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = DATA.filter(item => {
+    const n = item.name.toLowerCase();
+    const i = item.id.toLowerCase();
+    return keywords.every(kw => n.includes(kw) || i.includes(kw));
+  });
+  // prefix match first
+  const joined = keywords.join('_');
+  results.sort((a, b) => {
+    const aStarts = a.name.toLowerCase().startsWith(keywords[0]) ? 0 : 1;
+    const bStarts = b.name.toLowerCase().startsWith(keywords[0]) ? 0 : 1;
+    if (aStarts !== bStarts) return aStarts - bStarts;
+    return a.name.localeCompare(b.name);
+  });
+  render(results, keywords);
+}
+
+document.getElementById('searchInput').addEventListener('input', doSearch);
+render([], []);
+</script>
+</body>
+</html>
